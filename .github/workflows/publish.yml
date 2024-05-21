@@ -18,6 +18,7 @@ jobs:
       run: |
         python3 -m venv venv
         . venv/bin/activate
+        pip install -U pip setuptools wheel build
         python -m build
     - name: Store Distribution Packages
       uses: actions/upload-artifact@v3
