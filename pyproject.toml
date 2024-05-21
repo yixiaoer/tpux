@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project]
+name = "tpux"
+authors = [
+  { name="Shin", email="shin@yixiaoer.sg" },
+]
+description = "A set of Python scripts that makes your experience on TPU better"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    'License :: OSI Approved :: MIT License',
+    'Topic :: System :: Distributed Computing',
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = []
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/yixiaoer/tpux"
+Issues = "https://github.com/yixiaoer/tpux/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "tpux.__version__"}
+
+[project.scripts]
+tpux = "tpux.cli:main"
