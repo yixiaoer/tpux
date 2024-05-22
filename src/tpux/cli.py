@@ -1,21 +1,20 @@
 import glob
 import os
 import subprocess
-from typing import Literal
+from typing import Literal, Optional, Union
 
-def expect_user_input(prompt: str, default: Literal['y'] | Literal['n'] | None = None):
-    match default:
-        case 'y':
-            options = '[Y/n]'
-        case 'n':
-            options = '[y/N]'
-        case None:
-            options = '[y/n]'
-        case _:
-            raise ValueError(f'Invalid default value {default}')
+def expect_user_input(prompt: str, default: Optional[Union[Literal['y'], Literal['n']]] = None):
+    if default == 'y':
+        options = '[Y/n]'
+    elif default == 'n':
+        options = '[y/N]'
+    elif default == None:
+        options = '[y/n]'
+    else:
+        raise ValueError(f'Invalid default value {default}')
 
     while True:
-        res: str | None = input(f'{prompt} {options} ')
+        res: Union[str, None] = input(f'{prompt} {options} ')
         res = default if res == '' else res
 
         if res == 'y':
