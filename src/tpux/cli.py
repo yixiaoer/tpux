@@ -25,7 +25,7 @@ def expect_user_input(prompt: str, default: Optional[Union[Literal['y'], Literal
             print('Please answer "y" or "n"')
 
 def check_is_not_root() -> None:
-    is_root = os.geteuid() != 0
+    is_root = os.geteuid() == 0
     if is_root:
         print('Please run this script as a normal user, not root.')
         exit(-1)
