@@ -3,6 +3,9 @@ import os
 import subprocess
 from typing import Literal, Optional, Union
 
+env = os.environ.copy()
+env['DEBIAN_FRONTEND'] = 'noninteractive'
+
 def expect_user_input(prompt: str, default: Optional[Union[Literal['y'], Literal['n']]] = None):
     if default == 'y':
         options = '[Y/n]'
@@ -38,16 +41,16 @@ def check_tpu_chip_exists() -> None:
 
 def install_packages():
     commands = [
-        'DEBIAN_FRONTEND=noninteractive sudo apt-get update -y -qq',
-        'DEBIAN_FRONTEND=noninteractive sudo apt-get upgrade -y -qq',
-        'DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq golang neofetch zsh byobu',
-        'DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq software-properties-common',
-        'DEBIAN_FRONTEND=noninteractive sudo add-apt-repository -y ppa:deadsnakes/ppa',
-        'DEBIAN_FRONTEND=noninteractive sudo apt-get install -y -qq python3.12-full python3.12-dev',
+        'sudo apt-get update -y -qq',
+        'sudo apt-get upgrade -y -qq',
+        'sudo apt-get install -y -qq golang neofetch zsh byobu',
+        'sudo apt-get install -y -qq software-properties-common',
+        'sudo add-apt-repository -y ppa:deadsnakes/ppa',
+        'sudo apt-get install -y -qq python3.12-full python3.12-dev',
     ]
 
     for command in commands:
-        result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
         if result.returncode != 0:
             print(f'Command failed: {command}')
             print(f'Error: {result.stderr.decode()}')
