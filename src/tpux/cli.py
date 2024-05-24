@@ -1,12 +1,37 @@
 import glob
+import ipaddress
+import json
 import os
 import subprocess
-from typing import Literal, Optional, Union
+from typing import Callable, Literal, Optional, Union
 
 env = os.environ.copy()
 env['DEBIAN_FRONTEND'] = 'noninteractive'
 
-def expect_user_input(prompt: str, default: Optional[Union[Literal['y'], Literal['n']]] = None):
+config_dir = os.path.expanduser('~/.config/tpux')
+os.makedirs(config_dir, exist_ok=True)
+config_file = os.path.join(config_dir, 'config.json')
+
+def write_config_file(obj) -> None:
+    with open(config_file, 'w') as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+
+if not os.path.exists(config_file):
+    write_config_file({})
+
+def is_valid_private_ipv4_addr(s: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(s)
+    except ValueError:
+        return False
+    return ip.is_private and isinstance(ip, ipaddress.IPv4Address)
+
+def is_valid_private_ipv4_addrs(ips: str) -> bool:
+    parts = ips.split(',')
+    parts = [part.strip() for part in parts]
+    return all(is_valid_private_ipv4_addr(part) for part in parts)
+
+def expect_user_input_bool(prompt: str, *, default: Optional[Union[Literal['y'], Literal['n']]] = None) -> bool:
     if default == 'y':
         options = '[Y/n]'
     elif default == 'n':
@@ -26,6 +51,15 @@ def expect_user_input(prompt: str, default: Optional[Union[Literal['y'], Literal
             return False
         else:
             print('Please answer "y" or "n"')
+
+def expect_user_input_str(prompt: str, *, default: Optional[str] = None, is_valid: Optional[Callable[[str], bool]] = None) -> str:
+    default_text = '' if default is None else f'[default: {repr(default)}] '
+
+    while True:
+        res = input(f'{prompt} {default_text}')
+        if is_valid is None or is_valid(res):
+            return res
+        print('Invalid input, please try again.')
 
 def check_is_not_root() -> None:
     is_root = os.geteuid() == 0
@@ -57,7 +91,7 @@ def install_packages():
             exit(-1)
 
 def install_oh_my_zsh():
-    install_zsh = expect_user_input('Do you want to install oh my zsh?', default='y')
+    install_zsh = expect_user_input_bool('Do you want to install oh my zsh?', default='y')
     if install_zsh:
         commands = [
             'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended',
@@ -70,6 +104,10 @@ def install_oh_my_zsh():
                 print(f'Command failed: {command}')
                 print(f'Error: {result.stderr}')
                 exit(-1)
+
+def get_ips_of_pods():
+    ip_host0 = expect_user_input_str('Input the private (internal) IPv4 address of the current host.', default=None, is_valid=is_valid_private_ipv4_addr)
+    ip_host_others = expect_user_input_str('Input the private (internal) IPv4 address of the other hosts, comma separated.', is_valid=is_valid_private_ipv4_addrs)
 
 def setup_single_host():
     check_is_not_root()
@@ -87,7 +125,7 @@ def main():
         'This script will guide you to setup environment on a new Cloud TPU.\n'
     )
 
-    is_tpu_pod = expect_user_input('Are you running on a TPU Pod (instead of a single TPU host)?')
+    is_tpu_pod = expect_user_input_bool('Are you running on a TPU Pod (instead of a single TPU host)?')
     if is_tpu_pod:
         setup_tpu_pod()
     else:
