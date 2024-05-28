@@ -19,8 +19,8 @@ classifiers = [
     'Topic :: System :: Distributed Computing',
     "Operating System :: POSIX :: Linux",
 ]
-dependencies = []
-dynamic = ["version"]
+dynamic = ["dependencies", "version"]
+dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/yixiaoer/tpux"
