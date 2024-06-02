@@ -2,6 +2,7 @@ import glob
 from ipaddress import AddressValueError, IPv4Address
 import json
 import os
+import re
 import socket
 import subprocess
 from typing import Callable, List, Literal, Optional, Union
@@ -98,6 +99,48 @@ def get_priv_ipv4_addr(*, interface_prefix: str = 'ens') -> IPv4Address:
                     return IPv4Address(addr.address)
     raise RuntimeError('Cannot detect the private IPv4 address.')
 
+ssh_config_file = os.path.expanduser('~/.ssh/config')
+block_start = '# BEGIN tpux configuration'
+block_end = '# END tpux configuration'
+block_pattern = re.compile(re.escape(block_start) + r'.*?' + re.escape(block_end), re.DOTALL)
+
+def insert_ssh_config(ip_host_others: List[IPv4Address]) -> None:
+    os.makedirs(os.path.expanduser('~/.ssh'), exist_ok=True)
+    ips_str = '127.0.0.1 ' + ' '.join(str(ip) for ip in ip_host_others)
+    config = f'''{block_start}
+Host {ips_str}
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+{block_end}
+'''
+
+    if not os.path.exists(ssh_config_file):
+        content = ''
+    else:
+        with open(ssh_config_file, 'r') as f:
+            content = f.read()
+
+    if not block_pattern.search(content):
+        if not content or content.endswith('\n\n'):
+            new_content = f'{content}{config}'
+        else:
+            new_content = f'{content}\n{config}'
+    else:
+        new_content = block_pattern.sub(config, content)
+
+    with open(ssh_config_file, 'w') as f:
+        f.write(new_content)
+
+def clear_ssh_config() -> None:
+    with open(ssh_config_file, 'r') as f:
+        content = f.read()
+
+    new_content = block_pattern.sub('', content)
+
+    with open(ssh_config_file, 'w') as f:
+        f.write(new_content)
+
 def check_is_not_root() -> None:
     is_root = os.geteuid() == 0
     if is_root:
@@ -142,10 +185,6 @@ def install_oh_my_zsh():
                 print(f'Error: {result.stderr}')
                 exit(-1)
 
-def get_ips_of_pods():
-    ip_host0 = input_priv_ipv4_addr('Input the private (internal) IPv4 address of the current host', default=get_priv_ipv4_addr())
-    ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated')
-
 def setup_single_host():
     check_is_not_root()
     check_tpu_chip_exists()
@@ -154,6 +193,13 @@ def setup_single_host():
     raise NotImplementedError
 
 def setup_tpu_pod():
+    ip_host0 = input_priv_ipv4_addr('Input the private (internal) IPv4 address of the current host', default=get_priv_ipv4_addr())
+    ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated')
+    insert_ssh_config(ip_host_others=ip_host_others)
+    raise NotImplementedError
+
+def clear_setup_tpu_pod():
+    clear_ssh_config()
     raise NotImplementedError
 
 def main():
