@@ -116,6 +116,9 @@ Host {ips_str}
 '''
 
     if not os.path.exists(ssh_config_file):
+        with open(ssh_config_file, 'w') as f:
+            pass
+        os.chmod(ssh_config_file, 0o600)
         content = ''
     else:
         with open(ssh_config_file, 'r') as f:
@@ -140,6 +143,25 @@ def clear_ssh_config() -> None:
 
     with open(ssh_config_file, 'w') as f:
         f.write(new_content)
+
+public_key_path = os.path.expanduser('~/.ssh/id_ed25519_tpux.pub')
+private_key_path = os.path.expanduser('~/.ssh/id_ed25519_tpux')
+
+def generate_ssh_key() -> None:
+    command = ['ssh-keygen', '-t', 'ed25519', '-f', private_key_path, '-N', '']
+    subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+
+    with open(public_key_path, 'r') as f:
+        public_key = f.read()
+
+    print(f'''Generated public key for tpux:
+{public_key.strip()}
+Please open https://console.cloud.google.com/compute/metadata?resourceTab=sshkeys add this public key. This key will be automatically propagated to all hosts.''')
+    input('Please press enter to continue...')
+
+def clear_ssh_key() -> None:
+    os.remove(public_key_path)
+    os.remove(private_key_path)
 
 def check_is_not_root() -> None:
     is_root = os.geteuid() == 0
@@ -196,10 +218,12 @@ def setup_tpu_pod():
     ip_host0 = input_priv_ipv4_addr('Input the private (internal) IPv4 address of the current host', default=get_priv_ipv4_addr())
     ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated')
     insert_ssh_config(ip_host_others=ip_host_others)
+    generate_ssh_key()
     raise NotImplementedError
 
 def clear_setup_tpu_pod():
     clear_ssh_config()
+    clear_ssh_key()
     raise NotImplementedError
 
 def main():
