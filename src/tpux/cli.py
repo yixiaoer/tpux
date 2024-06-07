@@ -9,6 +9,8 @@ from typing import Callable, List, Literal, Optional, Union
 
 import psutil
 
+from .utils import get_podips_config_file
+
 env = os.environ.copy()
 env['DEBIAN_FRONTEND'] = 'noninteractive'
 
@@ -163,6 +165,12 @@ def clear_ssh_key() -> None:
     os.remove(public_key_path)
     os.remove(private_key_path)
 
+def write_podips_config(ip_host_others: List[IPv4Address]) -> None:
+    podips_config_file = get_podips_config_file()
+    with open(podips_config_file, 'w') as f:
+        for ip in ip_host_others:
+            print(ip, file=f)
+
 def check_is_not_root() -> None:
     is_root = os.geteuid() == 0
     if is_root:
@@ -218,6 +226,7 @@ def setup_tpu_pod():
     ip_host0 = input_priv_ipv4_addr('Input the private (internal) IPv4 address of the current host', default=get_priv_ipv4_addr())
     ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated')
     insert_ssh_config(ip_host_others=ip_host_others)
+    write_podips_config(ip_host_others=ip_host_others)  # TODO: do we need to add host0 ip here?
     generate_ssh_key()
     raise NotImplementedError
 

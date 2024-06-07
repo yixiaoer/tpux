@@ -20,14 +20,15 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
 ]
 dynamic = ["dependencies", "version"]
-dependencies = {file = ["requirements.txt"]}
 
 [project.urls]
 Homepage = "https://github.com/yixiaoer/tpux"
 Issues = "https://github.com/yixiaoer/tpux/issues"
 
 [tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 version = {attr = "tpux.__version__"}
 
 [project.scripts]
 tpux = "tpux.cli:main"
+podrun = "tpux.podrun:main"
