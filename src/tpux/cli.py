@@ -2,14 +2,18 @@ import glob
 from ipaddress import AddressValueError, IPv4Address
 import json
 import os
+from pathlib import Path
 import re
 import socket
 import subprocess
-from typing import Callable, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 
 import psutil
 
 from .utils import get_podips_config_file
+
+YELLOW_START = '\033[93m'
+COLOR_RESET = '\033[0m'
 
 env = os.environ.copy()
 env['DEBIAN_FRONTEND'] = 'noninteractive'
@@ -114,6 +118,7 @@ Host {ips_str}
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
     LogLevel ERROR
+    IdentityFile ~/.ssh/id_ed25519_tpux
 {block_end}
 '''
 
@@ -123,8 +128,7 @@ Host {ips_str}
         os.chmod(ssh_config_file, 0o600)
         content = ''
     else:
-        with open(ssh_config_file, 'r') as f:
-            content = f.read()
+        content = Path(ssh_config_file).read_text()
 
     if not block_pattern.search(content):
         if not content or content.endswith('\n\n'):
@@ -138,8 +142,10 @@ Host {ips_str}
         f.write(new_content)
 
 def clear_ssh_config() -> None:
-    with open(ssh_config_file, 'r') as f:
-        content = f.read()
+    if not os.path.exists(ssh_config_file):
+        return
+
+    content = Path(ssh_config_file).read_text()
 
     new_content = block_pattern.sub('', content)
 
@@ -148,22 +154,30 @@ def clear_ssh_config() -> None:
 
 public_key_path = os.path.expanduser('~/.ssh/id_ed25519_tpux.pub')
 private_key_path = os.path.expanduser('~/.ssh/id_ed25519_tpux')
+authorized_key_path = os.path.expanduser('~/.ssh/authorized_keys')
 
 def generate_ssh_key() -> None:
     command = ['ssh-keygen', '-t', 'ed25519', '-f', private_key_path, '-N', '']
     subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
 
-    with open(public_key_path, 'r') as f:
-        public_key = f.read()
+    public_key = Path(public_key_path).read_text().strip()
 
     print(f'''Generated public key for tpux:
-{public_key.strip()}
-Please open https://console.cloud.google.com/compute/metadata?resourceTab=sshkeys add this public key. This key will be automatically propagated to all hosts.''')
+{public_key}
+{YELLOW_START}Please open https://console.cloud.google.com/compute/metadata?resourceTab=sshkeys add this public key. This key will be automatically propagated to all hosts.{COLOR_RESET}''')
     input('Please press enter to continue...')
 
+    while True:
+        authorized_key_data = Path(authorized_key_path).read_text()
+        if public_key in authorized_key_data:
+            break
+        input('The key has not been propagated to host machines. Please wait for a while, and then press enter to continue...')
+
 def clear_ssh_key() -> None:
-    os.remove(public_key_path)
-    os.remove(private_key_path)
+    if os.path.exists(public_key_path):
+        os.remove(public_key_path)
+    if os.path.exists(private_key_path):
+        os.remove(private_key_path)
 
 def write_podips_config(ip_host_others: List[IPv4Address]) -> None:
     podips_config_file = get_podips_config_file()

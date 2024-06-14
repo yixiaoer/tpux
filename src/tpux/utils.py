@@ -15,6 +15,11 @@ def get_podips() -> List[str]:
     with open(podips_config_file, 'r') as f:
         return [line.rstrip('\n') for line in f]
 
-def run_command(hosts: List[str], command: str) -> None:
+def run_command_on_all_hosts(command: str, *, append_localhost: bool) -> None:
+    hosts = get_podips()
+
+    if append_localhost:
+        hosts.append('127.0.0.1')
+
     with fabric.ThreadingGroup(*hosts) as group:
         group.run(command)
