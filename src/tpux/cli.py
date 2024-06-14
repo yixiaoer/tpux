@@ -6,11 +6,12 @@ from pathlib import Path
 import re
 import socket
 import subprocess
+import tempfile
 from typing import List, Literal, Optional, Union
 
 import psutil
 
-from .utils import get_podips_config_file
+from .utils import get_podips, get_podips_config_file, run_command_on_all_hosts, run_command_on_localhost, run_commands_on_all_hosts, run_commands_on_localhost
 
 YELLOW_START = '\033[93m'
 COLOR_RESET = '\033[0m'
@@ -50,19 +51,6 @@ def input_bool(prompt: str, *, default: Optional[Union[Literal['y'], Literal['n'
         else:
             print('Please answer "y" or "n".')
 
-def input_priv_ipv4_addr(prompt: str, default: Optional[IPv4Address] = None) -> IPv4Address:
-    default_str = ': ' if default is None else f' (default: {default}): '
-    actual_prompt = f'{prompt}{default_str}'
-    while True:
-        s = input(actual_prompt)
-        if not s and default is not None:
-            return default
-        try:
-            return IPv4Address(s)
-        except AddressValueError:
-            pass
-        print('Please input a valid private IPv4 address.')
-
 def input_priv_ipv4_addrs(prompt: str, default: Optional[List[IPv4Address]] = None) -> List[IPv4Address]:
     if default is None:
         default_str = ': '
@@ -86,15 +74,6 @@ def input_priv_ipv4_addrs(prompt: str, default: Optional[List[IPv4Address]] = No
         except AddressValueError:
             pass
         print('Please input a list of valid private IPv4 addresses (comma-separated).')
-
-# def input_str(prompt: str, *, default: Optional[str] = None, is_valid: Optional[Callable[[str], bool]] = None) -> str:
-#     default_text = '' if default is None else f'[default: {repr(default)}] '
-
-#     while True:
-#         res = input(f'{prompt} {default_text}')
-#         if is_valid is None or is_valid(res):
-#             return res
-#         print('Invalid input, please try again.')
 
 def get_priv_ipv4_addr(*, interface_prefix: str = 'ens') -> IPv4Address:
     addrs = psutil.net_if_addrs()
@@ -174,10 +153,11 @@ def generate_ssh_key() -> None:
         input('The key has not been propagated to host machines. Please wait for a while, and then press enter to continue...')
 
 def clear_ssh_key() -> None:
-    if os.path.exists(public_key_path):
-        os.remove(public_key_path)
-    if os.path.exists(private_key_path):
-        os.remove(private_key_path)
+    public_key_file = Path(public_key_path)
+    public_key_file.unlink(missing_ok=True)
+
+    private_key_file = Path(private_key_path)
+    private_key_file.unlink(missing_ok=True)
 
 def write_podips_config(ip_host_others: List[IPv4Address]) -> None:
     podips_config_file = get_podips_config_file()
@@ -197,59 +177,123 @@ def check_tpu_chip_exists() -> None:
         print('TPU chips not detected, exiting...')
         exit(-1)
 
-def install_packages():
-    commands = [
-        'sudo apt-get update -y -qq',
-        'sudo apt-get upgrade -y -qq',
-        'sudo apt-get install -y -qq golang neofetch zsh byobu',
-        'sudo apt-get install -y -qq software-properties-common',
-        'sudo add-apt-repository -y ppa:deadsnakes/ppa',
-        'sudo apt-get install -y -qq python3.12-full python3.12-dev',
-    ]
+update_apt_commands = [
+    'sudo apt-get update -y -qq',
+    'sudo apt-get upgrade -y -qq',
+]
 
-    for command in commands:
-        result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
-        if result.returncode != 0:
-            print(f'Command failed: {command}')
-            print(f'Error: {result.stderr.decode()}')
-            exit(-1)
+install_packages_commands = [
+    'sudo apt-get install -y -qq golang neofetch zsh byobu',
+    'sudo apt-get install -y -qq software-properties-common',
+    'sudo add-apt-repository -y ppa:deadsnakes/ppa',
+    'sudo apt-get install -y -qq python3.12-full python3.12-dev',
+]
 
-def install_oh_my_zsh():
+install_oh_my_zsh_commands = [
+    'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended',
+    'sudo chsh $USER -s /usr/bin/zsh',
+]
+
+def update_apt() -> None:
+    run_commands_on_localhost(update_apt_commands)
+
+def update_apt_on_hosts() -> None:
+    run_commands_on_all_hosts(update_apt_commands, include_local=True)
+
+def install_packages() -> None:
+    run_commands_on_localhost(install_packages_commands)
+
+def install_packages_on_hosts() -> None:
+    run_commands_on_all_hosts(install_packages_commands, include_local=True)
+
+def install_oh_my_zsh() -> None:
     install_zsh = input_bool('Do you want to install oh my zsh?', default='y')
     if install_zsh:
-        commands = [
-            'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended',
-            'sudo chsh $USER -s /usr/bin/zsh',
-        ]
+        run_commands_on_localhost(install_oh_my_zsh_commands, shell=True)
 
-        for command in commands:
-            result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if result.returncode != 0:
-                print(f'Command failed: {command}')
-                print(f'Error: {result.stderr}')
-                exit(-1)
+def install_oh_my_zsh_on_hosts() -> None:
+    install_zsh = input_bool('Do you want to install oh my zsh?', default='y')
+    if install_zsh:
+        run_commands_on_all_hosts(install_oh_my_zsh_commands, include_local=True)
 
-def setup_single_host():
-    check_is_not_root()
-    check_tpu_chip_exists()
-    install_packages()
-    install_oh_my_zsh()
-    raise NotImplementedError
-
-def setup_tpu_pod():
-    ip_host0 = input_priv_ipv4_addr('Input the private (internal) IPv4 address of the current host', default=get_priv_ipv4_addr())
+def config_podips() -> None:
     ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated')
     insert_ssh_config(ip_host_others=ip_host_others)
     write_podips_config(ip_host_others=ip_host_others)  # TODO: do we need to add host0 ip here?
-    generate_ssh_key()
+
+def install_nfs_on_hosts():
+    run_command_on_all_hosts('sudo apt-get install -y -qq nfs-common', include_local=False)
+    run_commands_on_localhost([
+        'sudo apt-get install -y -qq nfs-kernel-server',
+        'sudo mkdir -p /nfs_share',
+        'sudo chown -R nobody:nogroup /nfs_share',
+        'sudo chmod 777 /nfs_share',
+    ])
+
+def insert_exports_config():
+    hosts = get_podips()
+    export_file_name = '/etc/exports'
+
+    export_file = Path(export_file_name).read_text()
+
+    new_entries = '\n'.join(f'/nfs_share {ip}(rw,sync,no_subtree_check)' for ip in hosts)
+    export_file_new = f'''
+{export_file}
+{block_start}
+{new_entries}
+{block_end}
+'''
+
+    with tempfile.TemporaryDirectory() as name:
+        tmp_file = Path(name) / 'exports'
+        tmp_file.write_text(export_file_new)
+ 
+        subprocess.run(['sudo', 'cp', str(tmp_file), export_file_name], check=True)
+
+def clear_exports_config() -> None:
     raise NotImplementedError
 
-def clear_setup_tpu_pod():
+def config_nfs() -> None:
+    ip_host0 = get_priv_ipv4_addr()
+
+    run_command_on_localhost('sudo exportfs -ra', check=True)
+    run_command_on_localhost('sudo systemctl restart nfs-kernel-server', check=True)
+
+    run_commands_on_all_hosts('sudo mkdir -p /nfs_share', include_local=False)
+    run_commands_on_all_hosts(f'sudo mount {ip_host0}:/nfs_share /nfs_share', include_local=False)
+    run_commands_on_all_hosts('ln -sf /nfs_share ~/nfs_share', include_local=True)
+
+    # run_command_on_localhost('touch ~/nfs_share/meow', include_local=True)
+    # run_commands_on_all_hosts('ls -la ~/nfs_share/meow', include_local=True)
+
+def setup_single_host() -> None:
+    check_is_not_root()
+    check_tpu_chip_exists()
+
+    update_apt()
+    install_packages()
+    install_oh_my_zsh()
+
+def setup_tpu_pod() -> None:
+    check_is_not_root()
+    check_tpu_chip_exists()
+
+    config_podips()
+    generate_ssh_key()
+
+    update_apt_on_hosts()
+    install_packages_on_hosts()
+    install_oh_my_zsh_on_hosts()
+
+    insert_exports_config()
+    config_nfs()
+
+def clear_setup_tpu_pod() -> None:
     clear_ssh_config()
     clear_ssh_key()
-    raise NotImplementedError
+    clear_exports_config()
 
-def main():
+def main() -> None:
     print(
         'Welcome to tpux setup script!\n'
         'This script will guide you to setup environment on a new Cloud TPU.\n'

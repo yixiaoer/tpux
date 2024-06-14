@@ -22,4 +22,4 @@ def main() -> None:
         cwd = os.getcwd()
         command = f'cd {cwd}; {command}'
 
-    run_command_on_all_hosts(command, append_localhost=args.include_local)
+    run_command_on_all_hosts(command, include_local=args.include_local)
