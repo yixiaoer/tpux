@@ -233,8 +233,9 @@ def install_nfs_on_hosts():
 def insert_exports_config():
     hosts = get_podips()
     export_file_name = '/etc/exports'
+    export_file_path = Path(export_file_name)
 
-    export_file = Path(export_file_name).read_text()
+    export_file = '' if not export_file_path.exists() else export_file_path.read_text()
 
     new_entries = '\n'.join(f'/nfs_share {ip}(rw,sync,no_subtree_check)' for ip in hosts)
     export_file_new = f'''
@@ -259,12 +260,9 @@ def config_nfs() -> None:
     run_command_on_localhost('sudo exportfs -ra', check=True)
     run_command_on_localhost('sudo systemctl restart nfs-kernel-server', check=True)
 
-    run_commands_on_all_hosts('sudo mkdir -p /nfs_share', include_local=False)
-    run_commands_on_all_hosts(f'sudo mount {ip_host0}:/nfs_share /nfs_share', include_local=False)
-    run_commands_on_all_hosts('ln -sf /nfs_share ~/nfs_share', include_local=True)
-
-    # run_command_on_localhost('touch ~/nfs_share/meow', include_local=True)
-    # run_commands_on_all_hosts('ls -la ~/nfs_share/meow', include_local=True)
+    run_command_on_all_hosts('sudo mkdir -p /nfs_share', include_local=False)
+    run_command_on_all_hosts(f'sudo mount {ip_host0}:/nfs_share /nfs_share', include_local=False)
+    run_command_on_all_hosts('ln -sf /nfs_share ~/nfs_share', include_local=True)
 
 def setup_single_host() -> None:
     check_is_not_root()
@@ -276,7 +274,7 @@ def setup_single_host() -> None:
 
 def setup_tpu_pod() -> None:
     check_is_not_root()
-    check_tpu_chip_exists()
+    # check_tpu_chip_exists()
 
     config_podips()
     generate_ssh_key()
@@ -284,7 +282,7 @@ def setup_tpu_pod() -> None:
     update_apt_on_hosts()
     install_packages_on_hosts()
     install_oh_my_zsh_on_hosts()
-
+    install_nfs_on_hosts()
     insert_exports_config()
     config_nfs()
 

@@ -10,6 +10,12 @@ name = "tpux"
 authors = [
   { name="Shin", email="shin@yixiaoer.sg" },
 ]
+# we cannot use `dynamic` here, because it doesn't work on Python 3.8
+version = "0.1.0"
+dependencies = [
+  "psutil",
+  "fabric",
+]
 description = "A set of Python scripts that makes your experience on TPU better"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -19,15 +25,10 @@ classifiers = [
     'Topic :: System :: Distributed Computing',
     "Operating System :: POSIX :: Linux",
 ]
-dynamic = ["dependencies", "version"]
 
 [project.urls]
 Homepage = "https://github.com/yixiaoer/tpux"
 Issues = "https://github.com/yixiaoer/tpux/issues"
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
-version = {attr = "tpux.__version__"}
 
 [project.scripts]
 tpux = "tpux.cli:main"
