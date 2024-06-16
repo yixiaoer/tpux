@@ -51,13 +51,14 @@ def input_bool(prompt: str, *, default: Optional[Union[Literal['y'], Literal['n'
         else:
             print('Please answer "y" or "n".')
 
-def input_priv_ipv4_addrs(prompt: str, default: Optional[List[IPv4Address]] = None) -> List[IPv4Address]:
+def input_priv_ipv4_addrs(prompt: str, note: Optional[str] = None, default: Optional[List[IPv4Address]] = None) -> List[IPv4Address]:
     if default is None:
         default_str = ': '
     else:
         ip_str = ','.join(str(ip_addr) for ip_addr in default)
         default_str = f' (default: {ip_str}): '
-    actual_prompt = f'{prompt}{default_str}'
+    actual_prompt = f'{prompt}{default_str}' if note is None else f'''{prompt}{default_str}
+{note}'''
 
     while True:
         s = input(actual_prompt)
@@ -73,13 +74,7 @@ def input_priv_ipv4_addrs(prompt: str, default: Optional[List[IPv4Address]] = No
             return ip_addrs
         except AddressValueError:
             pass
-        ip_host0 = get_priv_ipv4_addr()
-        print(f'''Please input a list of valid private IPv4 addresses (comma-separated).
-{YELLOW_START}To find the IPv4 addresses:
-1. Open https://console.cloud.google.com/compute/tpus
-2. Click on the node name of the TPU pod you're using in the current project
-3. In the details, find the External IP addresses
-4. Do NOT include the IP address of the current host: {ip_host0}{COLOR_RESET}''')
+        print(f'Please input a list of valid private IPv4 addresses (comma-separated).')
 
 def get_priv_ipv4_addr(*, interface_prefix: str = 'ens') -> IPv4Address:
     addrs = psutil.net_if_addrs()
@@ -226,7 +221,14 @@ def install_oh_my_zsh_on_hosts() -> None:
         run_commands_on_all_hosts(install_oh_my_zsh_commands, include_local=True)
 
 def config_podips() -> None:
-    ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated')
+    ip_host0 = get_priv_ipv4_addr()
+    note = f'''{YELLOW_START}To find the IPv4 addresses,
+1. Open https://console.cloud.google.com/compute/tpus
+2. Click on the node name of the TPU pod you're using in the current project
+3. In the details, find the External IP addresses
+4. Do NOT include the IP address of the current host: {ip_host0}{COLOR_RESET}
+'''
+    ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated', note)
     insert_ssh_config(ip_host_others=ip_host_others)
     write_podips_config(ip_host_others=ip_host_others)  # TODO: do we need to add host0 ip here?
 

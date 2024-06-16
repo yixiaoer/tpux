@@ -11,7 +11,7 @@ authors = [
   { name="Shin", email="shin@yixiaoer.sg" },
 ]
 # we cannot use `dynamic` here, because it doesn't work on Python 3.8
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
   "psutil",
   "fabric",
