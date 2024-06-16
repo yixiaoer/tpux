@@ -73,7 +73,13 @@ def input_priv_ipv4_addrs(prompt: str, default: Optional[List[IPv4Address]] = No
             return ip_addrs
         except AddressValueError:
             pass
-        print('Please input a list of valid private IPv4 addresses (comma-separated).')
+        ip_host0 = get_priv_ipv4_addr()
+        print(f'''Please input a list of valid private IPv4 addresses (comma-separated).
+{YELLOW_START}To find the IPv4 addresses:
+1. Open https://console.cloud.google.com/compute/tpus
+2. Click on the node name of the TPU pod you're using in the current project
+3. In the details, find the External IP addresses
+4. Do NOT include the IP address of the current host: {ip_host0}{COLOR_RESET}''')
 
 def get_priv_ipv4_addr(*, interface_prefix: str = 'ens') -> IPv4Address:
     addrs = psutil.net_if_addrs()
@@ -147,7 +153,8 @@ def generate_ssh_key() -> None:
     input('Please press enter to continue...')
 
     while True:
-        authorized_key_data = Path(authorized_key_path).read_text()
+        authorized_key_file = Path(authorized_key_path)
+        authorized_key_data = '' if not authorized_key_file.exists() else authorized_key_file.read_text()
         if public_key in authorized_key_data:
             break
         input('The key has not been propagated to host machines. Please wait for a while, and then press enter to continue...')
@@ -174,7 +181,9 @@ def check_is_not_root() -> None:
 def check_tpu_chip_exists() -> None:
     tpu_chip_exists = len(glob.glob('/dev/accel*')) > 0
     if not tpu_chip_exists:
-        print('TPU chips not detected, exiting...')
+        print('TPU chips not detected. Please check your TPU setup, create a new TPU VM or turn to the Cloud TPU documentation for further assistance.')
+        print('Exiting...')
+
         exit(-1)
 
 update_apt_commands = [
@@ -238,17 +247,24 @@ def insert_exports_config():
     export_file = '' if not export_file_path.exists() else export_file_path.read_text()
 
     new_entries = '\n'.join(f'/nfs_share {ip}(rw,sync,no_subtree_check)' for ip in hosts)
-    export_file_new = f'''
-{export_file}
+    export_new_entries = f'''
 {block_start}
 {new_entries}
 {block_end}
 '''
 
+    if not block_pattern.search(export_file):
+        if not export_file or export_file.endswith('\n\n'):
+            export_file_new = f'{export_file}{export_new_entries}'
+        else:
+            export_file_new = f'{export_file}\n{export_new_entries}'
+    else:
+        export_file_new = block_pattern.sub(export_new_entries, export_file)
+
     with tempfile.TemporaryDirectory() as name:
         tmp_file = Path(name) / 'exports'
         tmp_file.write_text(export_file_new)
- 
+
         subprocess.run(['sudo', 'cp', str(tmp_file), export_file_name], check=True)
 
 def clear_exports_config() -> None:
@@ -274,7 +290,7 @@ def setup_single_host() -> None:
 
 def setup_tpu_pod() -> None:
     check_is_not_root()
-    # check_tpu_chip_exists()
+    check_tpu_chip_exists()
 
     config_podips()
     generate_ssh_key()
