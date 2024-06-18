@@ -19,6 +19,10 @@ Inspired by the comprehensive guide [ayaka14732/tpu-starter](https://github.com/
 
 ## Setting Up Your TPU VM or TPU Pod with tpux
 
+Watch our [quick setup guide on YouTube](https://www.youtube.com/watch?v=a42YnpzcEYM) to see how to configure your TPU v4-32 using tpux. This video serves as an example, and the procedures can be applied to any Google Cloud TPU devices.
+
+[![Watch the tpux setup video](https://img.youtube.com/vi/a42YnpzcEYM/maxresdefault.jpg)](https://www.youtube.com/watch?v=a42YnpzcEYM)
+
 ### When Creating TPU VM or TPU Pod Instances
 
 During the creation of a TPU VM instance, ensure to select the latest `tpu-ubuntu2204-base` software version to benefit from the most up-to-date system and software packages.
