@@ -225,7 +225,7 @@ def config_podips() -> None:
     note = f'''{YELLOW_START}To find the IPv4 addresses,
 1. Open https://console.cloud.google.com/compute/tpus
 2. Click on the node name of the TPU pod you're using in the current project
-3. In the details, find the External IP addresses
+3. In the details, find the Internal IP addresses
 4. Do NOT include the IP address of the current host: {ip_host0}{COLOR_RESET}
 '''
     ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated', note)
