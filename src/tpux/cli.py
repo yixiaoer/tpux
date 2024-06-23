@@ -282,6 +282,31 @@ def config_nfs() -> None:
     run_command_on_all_hosts(f'sudo mount {ip_host0}:/nfs_share /nfs_share', include_local=False)
     run_command_on_all_hosts('ln -sf /nfs_share ~/nfs_share', include_local=True)
 
+def add_path_to_env() -> None:
+    bashrc_path = os.path.expanduser('~/.bashrc')
+    zshrc_path = os.path.expanduser('~/.zshrc')
+
+    if not os.path.exists(bashrc_path) and not os.path.exists(zshrc_path):
+        return
+
+    shell_config_file = zshrc_path if os.path.exists(zshrc_path) else bashrc_path
+    add_path = input_bool(f'Do you want to add the `export PATH="$HOME/.local/bin:$PATH"` to {shell_config_file}?', default='y')
+
+    if add_path:
+        shell_config = Path(shell_config_file).read_text().rstrip()
+        config = f'''{shell_config}
+
+{block_start}
+export PATH="$HOME/.local/bin:$PATH"
+{block_end}
+'''
+
+        with tempfile.TemporaryDirectory() as name:
+            tmp_file = Path(name) / 'shell_config'
+            tmp_file.write_text(config)
+
+            subprocess.run(['sudo', 'cp', str(tmp_file), shell_config_file], check=True)
+
 def setup_single_host() -> None:
     check_is_not_root()
     check_tpu_chip_exists()
@@ -289,6 +314,8 @@ def setup_single_host() -> None:
     update_apt()
     install_packages()
     install_oh_my_zsh()
+
+    add_path_to_env()
 
 def setup_tpu_pod() -> None:
     check_is_not_root()
@@ -303,6 +330,8 @@ def setup_tpu_pod() -> None:
     install_nfs_on_hosts()
     insert_exports_config()
     config_nfs()
+
+    add_path_to_env()
 
 def clear_setup_tpu_pod() -> None:
     clear_ssh_config()

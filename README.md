@@ -45,6 +45,12 @@ tpux
 
 Simply follow the on-screen prompts to complete the setup of your TPU VM or TPU Pod.
 
+If the PATH has been added to your shell configuration file (`~/.bashrc` or `~/.zshrc`) by default, you can run the `tpux` or `podrun` commands directly. Otherwise, add the following line before running the commands:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
 ### Executing Commands Across All Hosts with the `podrun` Command
 
 After setting up with the `tpux` command, you can use the `podrun` command to execute specified commands across all TPU hosts.
