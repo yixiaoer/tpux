@@ -88,7 +88,18 @@ def get_priv_ipv4_addr(*, interface_prefix: str = 'ens') -> IPv4Address:
 ssh_config_file = os.path.expanduser('~/.ssh/config')
 block_start = '# BEGIN tpux configuration'
 block_end = '# END tpux configuration'
-block_pattern = re.compile(re.escape(block_start) + r'.*?' + re.escape(block_end), re.DOTALL)
+block_pattern = re.compile(r'\n*' + re.escape(block_start) + r'.*?' + re.escape(block_end) + r'\n*', re.DOTALL)
+
+def clear_config_with_block(config_file: str, *, newline_format: str = '\n') -> None:
+    if not os.path.exists(config_file):
+        return
+
+    content = Path(config_file).read_text()
+
+    new_content = block_pattern.sub(f'\n{newline_format}', content).rstrip() + '\n'
+
+    with open(config_file, 'w') as f:
+        f.write(new_content)
 
 def insert_ssh_config(ip_host_others: List[IPv4Address]) -> None:
     os.makedirs(os.path.expanduser('~/.ssh'), exist_ok=True)
@@ -108,13 +119,13 @@ Host {ips_str}
         os.chmod(ssh_config_file, 0o600)
         content = ''
     else:
-        content = Path(ssh_config_file).read_text()
+        content = Path(ssh_config_file).read_text().rstrip()
 
     if not block_pattern.search(content):
-        if not content or content.endswith('\n\n'):
+        if not content:
             new_content = f'{content}{config}'
         else:
-            new_content = f'{content}\n{config}'
+            new_content = f'{content}\n\n{config}'
     else:
         new_content = block_pattern.sub(config, content)
 
@@ -122,15 +133,7 @@ Host {ips_str}
         f.write(new_content)
 
 def clear_ssh_config() -> None:
-    if not os.path.exists(ssh_config_file):
-        return
-
-    content = Path(ssh_config_file).read_text()
-
-    new_content = block_pattern.sub('', content)
-
-    with open(ssh_config_file, 'w') as f:
-        f.write(new_content)
+    clear_config_with_block(ssh_config_file)
 
 public_key_path = os.path.expanduser('~/.ssh/id_ed25519_tpux.pub')
 private_key_path = os.path.expanduser('~/.ssh/id_ed25519_tpux')
@@ -241,9 +244,9 @@ def install_nfs_on_hosts():
         'sudo chmod 777 /nfs_share',
     ])
 
+export_file_name = '/etc/exports'
 def insert_exports_config():
     hosts = get_podips()
-    export_file_name = '/etc/exports'
     export_file_path = Path(export_file_name)
 
     export_file = '' if not export_file_path.exists() else export_file_path.read_text()
@@ -270,7 +273,16 @@ def insert_exports_config():
         subprocess.run(['sudo', 'cp', str(tmp_file), export_file_name], check=True)
 
 def clear_exports_config() -> None:
-    raise NotImplementedError
+    export_file_path = Path(export_file_name)
+    export_file = '' if not export_file_path.exists() else export_file_path.read_text()
+
+    with tempfile.TemporaryDirectory() as name:
+        tmp_file = Path(name) / 'exports'
+        tmp_file.write_text(export_file)
+
+        clear_config_with_block(str(tmp_file))
+
+        subprocess.run(['sudo', 'cp', str(tmp_file), export_file_name], check=True)
 
 def config_nfs() -> None:
     ip_host0 = get_priv_ipv4_addr()
@@ -282,14 +294,17 @@ def config_nfs() -> None:
     run_command_on_all_hosts(f'sudo mount {ip_host0}:/nfs_share /nfs_share', include_local=False)
     run_command_on_all_hosts('ln -sf /nfs_share ~/nfs_share', include_local=True)
 
-def add_path_to_env() -> None:
+def get_shell_path() -> str:
     bashrc_path = os.path.expanduser('~/.bashrc')
     zshrc_path = os.path.expanduser('~/.zshrc')
 
     if not os.path.exists(bashrc_path) and not os.path.exists(zshrc_path):
-        return
+        raise ValueError("Neither `.bashrc` nor `.zshrc` configuration files were found in the user's home directory.")
 
-    shell_config_file = zshrc_path if os.path.exists(zshrc_path) else bashrc_path
+    return zshrc_path if os.path.exists(zshrc_path) else bashrc_path
+
+def add_path_to_env() -> None:
+    shell_config_file = get_shell_path()
     add_path = input_bool(f'Do you want to add the `export PATH="$HOME/.local/bin:$PATH"` to {shell_config_file}?', default='y')
 
     if add_path:
@@ -306,6 +321,10 @@ export PATH="$HOME/.local/bin:$PATH"
             tmp_file.write_text(config)
 
             subprocess.run(['sudo', 'cp', str(tmp_file), shell_config_file], check=True)
+
+def clear_path_to_env() -> None:
+    shell_config_file = get_shell_path()
+    clear_config_with_block(shell_config_file)
 
 def setup_single_host() -> None:
     check_is_not_root()
@@ -333,10 +352,14 @@ def setup_tpu_pod() -> None:
 
     add_path_to_env()
 
+def clear_setup_single_host() -> None:
+    clear_path_to_env()
+
 def clear_setup_tpu_pod() -> None:
     clear_ssh_config()
     clear_ssh_key()
     clear_exports_config()
+    clear_path_to_env()
 
 def main() -> None:
     print(
