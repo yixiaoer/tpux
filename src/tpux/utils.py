@@ -20,7 +20,11 @@ def get_podips() -> List[str]:
         return [line.rstrip('\n') for line in f]
 
 def run_command_on_localhost(command: str, **kwargs) -> None:
-    result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, **kwargs)
+    if kwargs.get('shell'):
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, **kwargs)
+    else:
+        result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, **kwargs)
+
     if result.returncode != 0:
         print(f'Command failed: {command}')
         print(f'Error: {result.stderr.decode()}')
