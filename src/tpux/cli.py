@@ -1,3 +1,5 @@
+import argparse
+from argparse import Namespace
 import glob
 from ipaddress import AddressValueError, IPv4Address
 import json
@@ -7,7 +9,7 @@ import re
 import socket
 import subprocess
 import tempfile
-from typing import List, Literal, Optional, Union
+from typing import Callable, List, Literal, Optional, Union
 
 import psutil
 
@@ -30,7 +32,31 @@ def write_config_file(obj) -> None:
 if not os.path.exists(config_file):
     write_config_file({})
 
-def input_bool(prompt: str, *, default: Optional[Union[Literal['y'], Literal['n']]] = None) -> bool:
+def parse_args() -> Namespace:
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--is_tpu_pod', '-p', type=str, choices=['y', 'n'], help='Run on a tpu Pod or not(which means run on a tpu VM)')
+    parser.add_argument('--install_zsh', '-z', type=str, choices=['y', 'n'], help='Install oh-my-zsh or not')
+    parser.add_argument('--add_path_to_shell_config', '-s', type=str, choices=['y', 'n'], help='Add path to shell config or not')
+
+    parser.add_argument('--priv_ipv4_addrs', '-i', type=str, help='The internal ipv4 addresses of other hosts')
+
+    parser.add_argument('--clear', '-c', action='store_true', help='Clear configuration settings')
+
+    args = parser.parse_args()
+    return args
+
+args = parse_args()
+
+def input_bool(prompt: str, *, arg_value: Optional[str] = None, default: Optional[Union[Literal['y'], Literal['n']]] = None) -> bool:
+    if arg_value is not None:
+        if arg_value == 'y':
+            return True
+        elif arg_value == 'n':
+            return False
+        else:
+            raise ValueError('Invalid arg value. Please use "y" or "n".')
+
     if default == 'y':
         options = '[Y/n]'
     elif default == 'n':
@@ -51,7 +77,22 @@ def input_bool(prompt: str, *, default: Optional[Union[Literal['y'], Literal['n'
         else:
             print('Please answer "y" or "n".')
 
-def input_priv_ipv4_addrs(prompt: str, note: Optional[str] = None, default: Optional[List[IPv4Address]] = None) -> List[IPv4Address]:
+def convert_str_addrs(s: str) -> List[IPv4Address]:
+    parts = s.split(',')
+    ip_addrs = []
+    for part in parts:
+        part = part.strip()
+        ip_addr = IPv4Address(part)
+        ip_addrs.append(ip_addr)
+    return ip_addrs
+
+def input_priv_ipv4_addrs(prompt: str, note: Optional[str] = None, *, arg_value: Optional[str] = None, default: Optional[List[IPv4Address]] = None) -> List[IPv4Address]:
+    if arg_value is not None:
+        try:
+            return convert_str_addrs(arg_value)
+        except AddressValueError as e:
+            raise ValueError(f'Invalid arg value. Please use a list of valid private IPv4 addresses (comma-separated).') from e
+
     if default is None:
         default_str = ': '
     else:
@@ -65,12 +106,7 @@ def input_priv_ipv4_addrs(prompt: str, note: Optional[str] = None, default: Opti
         if not s and default is not None:
             return default
         try:
-            parts = s.split(',')
-            ip_addrs = []
-            for part in parts:
-                part = part.strip()
-                ip_addr = IPv4Address(part)
-                ip_addrs.append(ip_addr)
+            ip_addrs = convert_str_addrs(s)
             return ip_addrs
         except AddressValueError:
             pass
@@ -214,12 +250,12 @@ def install_packages_on_hosts() -> None:
     run_commands_on_all_hosts(install_packages_commands, include_local=True)
 
 def install_oh_my_zsh() -> None:
-    install_zsh = input_bool('Do you want to install oh my zsh?', default='y')
+    install_zsh = input_bool('Do you want to install oh my zsh?', arg_value=args.install_zsh, default='y')
     if install_zsh:
         run_commands_on_localhost(install_oh_my_zsh_commands, shell=True)
 
 def install_oh_my_zsh_on_hosts() -> None:
-    install_zsh = input_bool('Do you want to install oh my zsh?', default='y')
+    install_zsh = input_bool('Do you want to install oh my zsh?', arg_value=args.install_zsh, default='y')
     if install_zsh:
         run_commands_on_all_hosts(install_oh_my_zsh_commands, include_local=True)
 
@@ -231,11 +267,11 @@ def config_podips() -> None:
 3. In the details, find the Internal IP addresses
 4. Do NOT include the IP address of the current host: {ip_host0}{COLOR_RESET}
 '''
-    ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated', note)
+    ip_host_others = input_priv_ipv4_addrs('Input the private (internal) IPv4 address of the other hosts, comma separated', note, arg_value=args.priv_ipv4_addrs)
     insert_ssh_config(ip_host_others=ip_host_others)
     write_podips_config(ip_host_others=ip_host_others)  # TODO: do we need to add host0 ip here?
 
-def install_nfs_on_hosts():
+def install_nfs_on_hosts() -> None:
     run_command_on_all_hosts('sudo apt-get install -y -qq nfs-common', include_local=False)
     run_commands_on_localhost([
         'sudo apt-get install -y -qq nfs-kernel-server',
@@ -245,7 +281,7 @@ def install_nfs_on_hosts():
     ])
 
 export_file_name = '/etc/exports'
-def insert_exports_config():
+def insert_exports_config() -> None:
     hosts = get_podips()
     export_file_path = Path(export_file_name)
 
@@ -305,9 +341,9 @@ def get_shell_path() -> str:
 
 def add_path_to_env() -> None:
     shell_config_file = get_shell_path()
-    add_path = input_bool(f'Do you want to add the `export PATH="$HOME/.local/bin:$PATH"` to {shell_config_file}?', default='y')
+    add_path_to_shell_config = input_bool(f'Do you want to add the `export PATH="$HOME/.local/bin:$PATH"` to {shell_config_file}?', arg_value=args.add_path_to_shell_config, default='y')
 
-    if add_path:
+    if add_path_to_shell_config:
         shell_config = Path(shell_config_file).read_text().rstrip()
         config = f'''{shell_config}
 
@@ -361,14 +397,21 @@ def clear_setup_tpu_pod() -> None:
     clear_exports_config()
     clear_path_to_env()
 
+def setup_or_clear(setup_fn: Callable[[], None], clear_fn: Callable[[], None], is_clear: bool) -> None:
+    if is_clear:
+        clear_fn()
+    else:
+        setup_fn()
+
 def main() -> None:
     print(
         'Welcome to tpux setup script!\n'
         'This script will guide you to setup environment on a new Cloud TPU.\n'
     )
 
-    is_tpu_pod = input_bool('Are you running on a TPU Pod (instead of a single TPU host)?')
+    is_tpu_pod = input_bool('Are you running on a TPU Pod (instead of a single TPU host)?', arg_value=args.is_tpu_pod)
+
     if is_tpu_pod:
-        setup_tpu_pod()
+        setup_or_clear(setup_tpu_pod, clear_setup_tpu_pod, args.clear)
     else:
-        setup_single_host()
+        setup_or_clear(setup_single_host, clear_setup_single_host, args.clear)
