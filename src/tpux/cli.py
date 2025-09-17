@@ -213,7 +213,7 @@ def check_is_not_root() -> None:
         exit(-1)
 
 def check_tpu_chip_exists() -> None:
-    tpu_chip_exists = len(glob.glob('/dev/accel*')) > 0
+    tpu_chip_exists = len(glob.glob('/dev/accel*')) + len(glob.glob('/dev/vfio/*')) > 0
     if not tpu_chip_exists:
         print('TPU chips not detected. Please check your TPU setup, create a new TPU VM or turn to the Cloud TPU documentation for further assistance.')
         print('Exiting...')
