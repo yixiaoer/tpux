@@ -38,6 +38,7 @@ def parse_args() -> Namespace:
     parser.add_argument('--is_tpu_pod', '-p', type=str, choices=['y', 'n'], help='Run on a tpu Pod or not(which means run on a tpu VM)')
     parser.add_argument('--install_zsh', '-z', type=str, choices=['y', 'n'], help='Install oh-my-zsh or not')
     parser.add_argument('--add_path_to_shell_config', '-s', type=str, choices=['y', 'n'], help='Add path to shell config or not')
+    parser.add_argument('--python', type=str, choices=['3.10', '3.11', '3.12'], default='3.12', help='Python version to install')
 
     parser.add_argument('--priv_ipv4_addrs', '-i', type=str, help='The internal ipv4 addresses of other hosts')
 
@@ -229,7 +230,7 @@ install_packages_commands = [
     'sudo apt-get install -y -qq golang neofetch zsh byobu',
     'sudo apt-get install -y -qq software-properties-common',
     'sudo add-apt-repository -y ppa:deadsnakes/ppa',
-    'sudo apt-get install -y -qq python3.12-full python3.12-dev',
+    f'sudo apt-get install -y -qq python{args.python}-full python{args.python}-dev',
 ]
 
 install_oh_my_zsh_commands = [
